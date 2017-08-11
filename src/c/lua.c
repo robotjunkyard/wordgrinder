@@ -4,10 +4,8 @@
  */
 
 #include "globals.h"
-
-#if defined BUILTIN_LFS
-#include "lfs/lfs.h"
-#endif
+#include "lfs.h"
+#include "lua-bitop.h"
 
 lua_State* L;
 
@@ -76,8 +74,9 @@ void script_init(void)
 	L = luaL_newstate();
 	luaL_openlibs(L);
 
-#if defined BUILTIN_LFS
 	luaopen_lfs(L);
+#if LUA_VERSION_NUM == 501
+	luaopen_bit(L);
 #endif
 
 	atexit(script_deinit);
@@ -92,7 +91,7 @@ void script_init(void)
 
 	lua_pushstring(L, ARCH);
 	lua_setglobal(L, "ARCH");
-	
+
 	lua_newtable(L);
 	lua_setglobal(L, "wg");
 

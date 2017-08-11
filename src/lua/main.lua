@@ -47,15 +47,16 @@ function QueueRedraw()
 end
 
 function ResetDocumentSet()
+	UpdateDocumentStyles()
 	DocumentSet = CreateDocumentSet()
 	DocumentSet.menu = CreateMenu()
 	Document = CreateDocument()
 	DocumentSet:addDocument(CreateDocument(), "main")
-	RebuildParagraphStylesMenu(DocumentSet.styles)
+	RebuildParagraphStylesMenu(DocumentStyles)
 	RebuildDocumentsMenu(DocumentSet.documents)
 	DocumentSet:purge()
 	DocumentSet:clean()
-	
+
 	FireEvent(Event.DocumentCreated)
 	FireEvent(Event.RegisterAddons)
 end
@@ -71,7 +72,7 @@ do
 	AddEventListener(Event.DocumentLoaded, cb)
 	AddEventListener(Event.DocumentCreated, cb)
 end
-	
+
 -- Kick the garbage collector whenever we're idle, just to keep
 -- memory usage down.
 
@@ -91,43 +92,51 @@ function WordProcessor(filename)
 	LoadGlobalSettings()
 
 	do
-		local f, e = loadfile(configfile)
-		if e and not e:find("No such file or directory") then
-			CLIError("config file compilation error: "..e)
-		end
-
-		if not e then
-			xpcall(f, CLIError)
+        local fp, e, errno = io.open(configfile, "r")
+		if fp then
+			f, e = load(ChunkStream(fp:read("*a")), configfile)
+			if f then
+				xpcall(f, CLIError)
+			else
+				CLIError("config file compilation error: "..e)
+			end
+			fp:close()
+		elseif (errno ~= wg.ENOENT) then
+			CLIError("config file load error: "..e)
 		end
 	end
 
 	wg.initscreen()
 	ResizeScreen()
 	RedrawScreen()
-	
+
 	if filename then
-		Cmd.LoadDocumentSet(filename)
+		if not Cmd.LoadDocumentSet(filename) then
+			-- As a special case, if we tried to load a document from the command line and it
+			-- doesn't exist, then we prime the document name so that saving the file is easy.
+			DocumentSet.name = filename
+		end
 	else
 		FireEvent(Event.DocumentLoaded)
 	end
-	
+
 	--ModalMessage("Welcome!", "Welcome to WordGrinder! While editing, you may press ESC for the menu, or ESC, F, X to exit (or ALT+F, X if your terminal supports it).")
-	
+
 	local masterkeymap = {
 		["KEY_RESIZE"] = function() -- resize
 			ResizeScreen()
 			RedrawScreen()
 		end,
-		
+
 		["KEY_REDRAW"] = RedrawScreen,
-		
+
 		[" "] = { Cmd.Checkpoint, Cmd.TypeWhileSelected,
 			Cmd.SplitCurrentWord },
 		["KEY_RETURN"] = { Cmd.Checkpoint, Cmd.TypeWhileSelected,
 			Cmd.SplitCurrentParagraph },
 		["KEY_ESCAPE"] = Cmd.ActivateMenu,
-	}	
-		
+	}
+
 	local function eventloop()
 		local nl = string.char(13)
 		while true do
@@ -135,7 +144,7 @@ function WordProcessor(filename)
 				FireEvent(Event.Changed)
 				DocumentSet.justchanged = false
 			end
-			
+
 			FlushAsyncEvents()
 			FireEvent(Event.WaitingForUser)
 			local c = "KEY_TIMEOUT"
@@ -144,15 +153,15 @@ function WordProcessor(filename)
 					RedrawScreen()
 					redrawpending = false
 				end
-			
+
 				c = wg.getchar(DocumentSet.idletime)
 				if (c == "KEY_TIMEOUT") then
 					FireEvent(Event.Idle)
 				end
 			end
-			
+
 			ResetNonmodalMessages()
-			
+
 			-- Anything in masterkeymap overrides everything else.
 			local f = masterkeymap[c]
 			if f then
@@ -160,7 +169,7 @@ function WordProcessor(filename)
 			else
 				-- It's not in masterkeymap. If it's printable, insert it; if it's
 				-- not, look it up in the menu hierarchy.
-				
+
 				if not c:match("^KEY_") then
 					Cmd.Checkpoint()
 					Cmd.TypeWhileSelected()
@@ -180,7 +189,7 @@ function WordProcessor(filename)
 			end
 		end
 	end
-	
+
 	while true do
 		local f, e = xpcall(eventloop, Traceback)
 		if not f then
@@ -199,20 +208,20 @@ end
 function Main(...)
 	-- Set up the initial document so that the command line options have
 	-- access.
-	
+
 	ResetDocumentSet()
 
 	local filename = nil
 	do
 		local stdout = io.stdout
 		local stderr = io.stderr
-		
+
 		local function do_help(opt)
 			stdout:write("WordGrinder version ", VERSION, " © 2007-2008 David Given\n")
 			if DEBUG then
 				stdout:write("(This version has been compiled with debugging enabled.)\n")
 			end
-			
+
 			stdout:write([[
 Syntax: wordgrinder [<options...>] [<filename>]
 Options:
@@ -240,10 +249,10 @@ the program starts up (but after any --lua files). It defaults to:
 			if DEBUG then
 				-- List debugging options here.
 			end
-			
+
 			os.exit(0)
 		end
-		
+
 		local function do_lua(opt1, opt2)
 			if not opt1 then
 				CLIError("--lua must have an argument")
@@ -260,15 +269,15 @@ the program starts up (but after any --lua files). It defaults to:
 			f(opt2)
 			os.exit(0)
 		end
-		
+
 		local function do_convert(opt1, opt2)
 			if not opt1 or not opt2 then
 				CLIError("--convert must have two arguments")
 			end
-			
+
 			CliConvert(opt1, opt2)
 		end
-		
+
 		local function do_config(opt1, opt2)
 			if not opt1 then
 				CLIError("--config must have an argument")
@@ -283,7 +292,7 @@ the program starts up (but after any --lua files). It defaults to:
 				CLIError("missing option parameter")
 			end
 		end
-		
+
 		local argmap = {
 			["h"]           = do_help,
 			["help"]        = do_help,
@@ -292,26 +301,26 @@ the program starts up (but after any --lua files). It defaults to:
 			["convert"]     = do_convert,
 			["config"]      = do_config,
 		}
-		
+
 		if DEBUG then
 			-- argmap["p"] = do_profile
 			-- argmap["profile"] = do_profile
 		end
-		 
+
 		-- Called on an unrecognised option.
-		
+
 		local function unrecognisedarg(arg)
 			CLIError("unrecognised option '", arg, "' --- try --help for help")
 		end
-		
+
 		-- Do the actual argument parsing.
-		
+
 		local arg = {...}
 		local i = 2
 		while (i <= #arg) do
 			local o = arg[i]
 			local op
-			
+
 			if (o:byte(1) == 45) then
 				-- This is an option.
 				if (o:byte(2) == 45) then
@@ -341,17 +350,17 @@ the program starts up (but after any --lua files). It defaults to:
 					CLIError("you may only specify one filename")
 				end
 				filename = o
-			end	
+			end
 
 			i = i + 1
 		end
 	end
-	
+
 	if filename and
 			not filename:find("^/") and
 			not filename:find("^[a-zA-Z]:[/\\]") then
 		filename = lfs.currentdir() .. "/" .. filename
 	end
-	
+
 	WordProcessor(filename)
 end

@@ -5,6 +5,7 @@
 
 #include "globals.h"
 #include <sys/time.h>
+#include <errno.h>
 
 static const uint8_t masks[6] = {
 	0xff, 0x1f, 0x0f, 0x07, 0x03, 0x01
@@ -45,7 +46,7 @@ uni_t readu8(const char** srcp)
 		(*srcp)++;
 		return 0xfffd;
 	}
-		
+
 	uni_t ch = (unsigned char)*src++ & masks[nb];
 	switch (nb) {
 	    /* these fall through deliberately */
@@ -113,7 +114,7 @@ void writeu8(char** destp, uni_t ch)
 static int readu8_cb(lua_State* L)
 {
 	const char* s = luaL_checkstring(L, 1);
-	int offset = lua_tointeger(L, 2);
+	int offset = forceinteger(L, 2);
 	uni_t c;
 
 	if (offset > 0)
@@ -128,7 +129,7 @@ static int readu8_cb(lua_State* L)
 
 static int writeu8_cb(lua_State* L)
 {
-	uni_t c = luaL_checkinteger(L, 1);
+	uni_t c = forceinteger(L, 1);
 	static char buffer[8];
 	char* s = buffer;
 
@@ -278,4 +279,7 @@ void utils_init(void)
 
 	lua_getglobal(L, "wg");
 	luaL_setfuncs(L, funcs, 0);
+
+	lua_pushinteger(L, ENOENT);
+	lua_setfield(L, -2, "ENOENT");
 }
