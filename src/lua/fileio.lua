@@ -80,7 +80,7 @@ local function writetostream(object, write, writeo)
 	if (GetClass(object) == DocumentSetClass) then
 		save(".current", object:_findDocument(object.current.name))
 
-		for i, d in ipairs(object.documents) do
+		local function save_document(i, d)
 			write("#")
 			write(tostring(i))
 			write("\n")
@@ -99,24 +99,23 @@ local function writetostream(object, write, writeo)
 			write(".")
 			write("\n")
 		end
+
+		if object.clipboard then
+			save_document("clipboard", object.clipboard)
+		end
+		for i, d in ipairs(object.documents) do
+			save_document(i, d)
+		end
 	end
 
 	return true
 end
 
 function SaveToStream(filename, object)
-	-- Ensure the destination file is writeable.
+	-- Write the file to a *different* filename (so that crashes during
+	-- writing doesn't corrupt the file).
 
-	local fp, e = io.open(filename, "wb")
-	if not fp then
-		return nil, e
-	end
-	fp:close()
-
-	-- However, write the file to a *different* filename
-	-- (so that crashes during writing doesn't corrupt the file).
-
-	fp, e = io.open(filename..".new", "wb")
+	local fp, e = io.open(filename..".new", "wb")
 	if not fp then
 		return nil, e
 	end
@@ -142,25 +141,23 @@ function SaveToStream(filename, object)
 	if r then
 		r, e = fp:write(TMAGIC, "\n", s)
 	end
-	if r then
-		r, e = fp:close()
+	r, e = fp:close()
+	if e then
+		return r, e
 	end
 
-	-- Once done, do a complicated series of renames so that we
-	-- don't remove the old file until we're sure the new one has
-	-- been written correctly. Note that accurs�d Windows doesn't
-	-- support clobbering renames...
+	-- At this point, we know the new file has been written correctly.
+	-- We can remove the old one and rename the new one to be the old
+	-- one. On proper operating systems we could do this in a single
+	-- os.rename, but Windows doesn't support clobbering renames.
 
-	if r then
-		r, e = os.rename(filename, filename..".old")
-		if not e then
-			r, e = os.rename(filename..".new", filename)
-		end
-		if not e then
-			os.remove(filename..".old")
-		end
+	os.remove(filename)
+	r, e = os.rename(filename..".new", filename)
+	if e then
+		-- Yikes! The old file has gone, but we couldn't rename the new
+		-- one...
+		return r, e..": the filename of your document has changed"
 	end
-
 	return r, e
 end
 
@@ -522,8 +519,17 @@ function loadfromstreamt(fp)
 
 			o[p] = v
 		elseif line:find("^#") then
-			local id = tonumber(line:sub(2))
-			local doc = data.documents[id]
+			local id = line:sub(2)
+			local doc
+			if (id == "clipboard") then
+				doc = data.clipboard
+				if not doc then
+					doc = {}
+					data.clipboard = doc
+				end
+			else
+				doc = data.documents[tonumber(id)]
+			end
 
 			local index = 1
 			while true do
@@ -550,6 +556,10 @@ function loadfromstreamt(fp)
 	end
 	data.current = data.documents[data.current]
 
+	-- Remove any broken clipboard (works around a bug in v0.6 saved files).
+	if data.clipboard and (#data.clipboard == 0) then
+		data.clipboard = nil
+	end
 	return data
 end
 
@@ -700,13 +710,20 @@ function UpgradeDocument(oldversion)
 		-- is now a string containing the name of the style; styles are looked up on
 		-- demand.
 
+        local function convertStyles(document)
+            for _, p in ipairs(document) do
+                if (type(p.style) ~= "string") then
+                    p.style = p.style.name
+                end
+            end
+        end
+
 		for _, document in ipairs(DocumentSet.documents) do
-			for _, p in ipairs(document) do
-				if (type(p.style) ~= "string") then
-					p.style = p.style.name
-				end
-			end
-		end
+            convertStyles(document)
+        end
+        if DocumentSet.clipboard then
+            convertStyles(DocumentSet.clipboard)
+        end
 		DocumentSet.styles = nil
 	end
 end

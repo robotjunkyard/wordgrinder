@@ -1,8 +1,8 @@
-                              WORDGRINDER V0.7.0
+                              WORDGRINDER V0.7.2
                               ==================
 
-                           © 2007-2017 David Given
-                                 2015-09-23
+                           © 2007-2018 David Given
+                                 2018-11-29
 
                                Windows version
 
@@ -59,30 +59,51 @@ https://lists.sourceforge.net/lists/listinfo/wordgrinder-users
 LICENSE
 =======
 
-WordGrinder is available under the MIT license. Please see the COPYING file
-for the full text.
+WordGrinder contains a number of embedded libraries, described here. Not all of
+them may be used by any given binary depending on your configuration. Please
+look in the licenses directory for the full license text.
 
-WordGrinder contains a copy of Lua 5.1. This is also MIT licensed and is
-© 1994–2017 Lua.org, PUC-Rio. See http://lua.org for more information.
+WordGrinder is © 2007-2017 David Given, and is available under the MIT license.
 
-WordGrinder contains a copy of the LuaFileSystem code. This is also MIT
+The distribution contains a copy of Lua 5.1. This is also MIT licensed and is ©
+1994–2017 Lua.org, PUC-Rio. See http://lua.org for more information.
+
+The distribution contains a copy of LuaBitOp. This is also MIT licensed and is ©
+2008-2012 Mike Pall. See http://bitop.luajit.org/ for more information.
+
+The distribution contains a copy of the LuaFileSystem code. This is also MIT
 licensed and is © The Kepler Project. See
 http://www.keplerproject.org/luafilesystem for more information.
 
-WordGrinder contains a copy of the xpattern module. This is also MIT licensed
-and is © David Manura. See http://lua-users.org/wiki/ExPattern for more
-information.
+The distribution contains a copy of the MiniZip library. This is © 1998-2010
+Gilles Vollant and Mathis Svenson, and is available under the BSD license.
 
-WordGrinder contains a copy of the SCOWL wordlist for British and
+The distribution contains a copy of the SCOWL wordlist for British and
 American-Canadian English. This is © Kevin Atkinson and J. Ross Beresford.
-Please see the README.Scowl file for the full license text.
+Please see the licenses/COPYING.Scowl file for the full license text.
+
+The distribution contains a copy of the uthash and utlist libraries. This is ©
+2003-2009 Troy D Hanson, and is available under a simplified BSD license.
+
+The distribution contains a copy of the xpattern module. This is also MIT
+licensed and is © 2008-2009 David Manura. See
+http://lua-users.org/wiki/ExPattern for more information.
 
 
 
 REVISION HISTORY
 ================
 
-WordGrinder 0.7: 2017-??-??: new plain text diffable file format; Lua 5.3
+WordGrinder 0.7.2: 2017-03-21: bugfix release. Pasting immediately after
+loading a document no longer hard crashes. Don't buffer overrun if given
+invalid unicode. Global settings are now updated correctly (in several
+places). Fix a data loss situation when saving fails.
+
+WordGrinder 0.7.1: 2017-11-02: correct and cleaner license reporting;
+rearrange the source so that we can avoid shipping upstream dependencies
+if we want. No actual code changes.
+
+WordGrinder 0.7: 2017-10-30: new plain text diffable file format; Lua 5.3
 support; better locale detection; dense paragraphs mode; lots of bugfixes.
 Official OSX support. New (better, hopefully) build system.
 

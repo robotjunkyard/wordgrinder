@@ -89,6 +89,7 @@ function build_wordgrinder_binary(exe, luapackage, frontend, buildstyle)
     allbinaries[#allbinaries+1] = exe
 
     local cflags = {
+        "$CFLAGS",
         "-g",
         "-DVERSION='\""..VERSION.."\"'",
         "-DFILEFORMAT="..FILEFORMAT,
@@ -103,6 +104,7 @@ function build_wordgrinder_binary(exe, luapackage, frontend, buildstyle)
         "--std=gnu99",
     }
     local ldflags = {
+        "$LDFLAGS",
         "-lz",
         "-lm",
         "-g",
@@ -150,6 +152,13 @@ function build_wordgrinder_binary(exe, luapackage, frontend, buildstyle)
     else
         cflags[#cflags+1] = package_flags(LUABITOP_PACKAGE, "--cflags")
         ldflags[#ldflags+1] = package_flags(LUABITOP_PACKAGE, "--libs")
+    end
+
+	if UTHASH_PACKAGE == "builtin" then
+		cflags[#cflags+1] = "-Isrc/c/emu/uthash"
+	else
+        cflags[#cflags+1] = package_flags(UTHASH_PACKAGE, "--cflags")
+        ldflags[#ldflags+1] = package_flags(UTHASH_PACKAGE, "--libs")
     end
 
     local cc
@@ -314,12 +323,15 @@ function run_wordgrinder_tests(exe, luapackage, frontend, buildstyle)
         "tests/weirdness-combining-words.lua",
         "tests/weirdness-deletion-with-multiple-spaces.lua",
         "tests/weirdness-end-of-lines.lua",
+        "tests/weirdness-globals-applied-on-startup.lua",
+        "tests/weirdness-missing-clipboard.lua",
         "tests/weirdness-replacing-words.lua",
         "tests/weirdness-save-new-document.lua",
         "tests/weirdness-splitting-lines-before-space.lua",
         "tests/weirdness-stray-control-char-in-export.lua",
         "tests/weirdness-styled-clipboard.lua",
         "tests/weirdness-styling-unicode.lua",
+        "tests/weirdness-upgrade-0.6-with-clipboard.lua",
         "tests/weirdness-word-left-from-end-of-line.lua",
         "tests/weirdness-word-right-to-last-word-in-doc.lua",
         "tests/windows-installdir.lua",
@@ -342,6 +354,12 @@ function install_file(mode, src, dest)
     installables[#installables+1] = dest
 end
 
+-- Sanity check
+
+if (not WANT_STRIPPED_BINARIES) or (WANT_STRIPPED_BINARIES == "") then
+    WANT_STRIPPED_BINARIES = "yes"
+end
+
 -- Detect what tools we have available.
 
 io.write("Windows toolchain: ")
@@ -357,6 +375,8 @@ FRONTENDS["x11"] = detect_package("FreeType2", "freetype2") and detect_package("
 
 detect_mandatory_package("Minizip", MINIZIP_PACKAGE)
 detect_mandatory_package("LuaFileSystem", LUAFILESYSTEM_PACKAGE)
+detect_mandatory_package("uthash", UTHASH_PACKAGE)
+detect_mandatory_package("LuaBitOp", LUABITOP_PACKAGE)
 
 local lua_packages = {}
 local function add_lua_package(package)
@@ -376,13 +396,18 @@ for _, luapackage in ipairs(lua_packages) do
     detect_package("Lua", luapackage)
 end
 
+emit("CFLAGS = ", CFLAGS)
+emit("LDFLAGS = ", LDFLAGS)
+
 if want_frontend("curses") then
     emit("CURSES_CFLAGS = ", package_flags(CURSES_PACKAGE, "--cflags"))
     emit("CURSES_LDFLAGS = ", package_flags(CURSES_PACKAGE, "--libs"))
 end
 if want_frontend("x11") then
-    emit("X11_CFLAGS = ", package_flags("freetype2", "--cflags"), " -I/usr/include/X11")
-    emit("X11_LDFLAGS = ", package_flags("freetype2", "--libs"), " -lX11 -lXft")
+    emit("X11_CFLAGS = ", package_flags("freetype2", "--cflags"),
+	" ", package_flags(XFT_PACKAGE, "--cflags"))
+    emit("X11_LDFLAGS = ", package_flags("freetype2", "--libs"),
+	" ",  package_flags(XFT_PACKAGE, "--libs"))
 end
 emit("LUA_INTERPRETER = ", LUA_INTERPRETER)
 emit("WINDRES = ", WINDRES)
@@ -490,28 +515,35 @@ if want_frontend("x11") or want_frontend("curses") then
     end
     print("The preferred Lua package is: '"..LUA_PACKAGE.."'")
 
+    local function strip_binary(binary)
+        if WANT_STRIPPED_BINARIES == "yes" then
+            local stripped = binary.."-stripped"
+            emit("build ", stripped, ": strip ", binary)
+            allbinaries[#allbinaries+1] = stripped
+            binary = stripped
+        end
+
+        return binary
+    end
+
     local preferred_test
     local preferred_curses
     local preferred_x11
-	local stripped_curses
-	local stripped_x11
     if want_frontend("curses") then
         preferred_curses = "bin/wordgrinder-"..package_name(LUA_PACKAGE).."-curses-release"
         preferred_test = "test-"..package_name(LUA_PACKAGE).."-curses-debug"
-		stripped_curses = preferred_curses.."-stripped"
-		emit("build ", stripped_curses, ": strip ", preferred_curses)
-		allbinaries[#allbinaries+1] = stripped_curses
-        install_file("755", stripped_curses, DESTDIR..BINDIR.."/wordgrinder")
+
+        preferred_curses = strip_binary(preferred_curses)
+        install_file("755", preferred_curses, DESTDIR..BINDIR.."/wordgrinder")
     end
     if want_frontend("x11") then
         preferred_x11 = "bin/xwordgrinder-"..package_name(LUA_PACKAGE).."-x11-release"
         if not preferred_test then
             preferred_test = "test-"..package_name(LUA_PACKAGE).."-x11-debug"
         end
-		stripped_x11 = preferred_x11.."-stripped"
-		emit("build ", stripped_x11, ": strip ", preferred_x11)
-		allbinaries[#allbinaries+1] = stripped_x11
-        install_file("755", stripped_x11, DESTDIR..BINDIR.."/xwordgrinder")
+
+        preferred_x11 = strip_binary(preferred_x11)
+        install_file("755", preferred_x11, DESTDIR..BINDIR.."/xwordgrinder")
     end
     install_file("644", "bin/wordgrinder.1", DESTDIR..MANDIR.."/man1/wordgrinder.1")
     install_file("644", "README.wg", DESTDIR..DOCDIR.."/wordgrinder/README.wg")
@@ -520,8 +552,11 @@ if want_frontend("x11") or want_frontend("curses") then
     emit("  date = ", DATE)
     emit("  version = ", VERSION)
 
-    emit("build all: phony bin/wordgrinder.1 ", stripped_curses or "", " ", stripped_x11 or "", " ", preferred_test)
+    emit("build binaries: phony bin/wordgrinder.1 ", preferred_curses or "", " ", preferred_x11 or "", " ")
+	emit("build tests: phony ", preferred_test)
+    emit("build all: phony binaries tests")
     emit("build install: phony all ", table.concat(installables, " "))
+    emit("build install-notests: phony binaries ", table.concat(installables, " "))
 end
 
 if want_frontend("windows") then
